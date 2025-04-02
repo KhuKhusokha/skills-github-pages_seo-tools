@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wolfgank AI Tools</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        /* Basic Cyberpunk Theme - Neon Orange */
+        :root {
+            --bg-color: #0a0a1a; /* Dark blue/black */
+            --primary-color: #ff6600; /* Neon orange */
+            --secondary-color: #ff8533; /* Lighter orange */
+            --text-color: #e0e0e0; /* Light grey/white */
+            --border-color: #ff6600a0; /* Semi-transparent orange */
+            --input-bg: #1a1a2e;
+            --output-bg: #101020;
+            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Clean font */
+            --glow-color: rgba(255, 102, 0, 0.7);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            min-height: 100vh;
+            font-size: 14px; /* Base font size */
+            overflow: hidden; /* Prevent body scroll if canvas covers all */
+        }
+
+        #threejs-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1; /* Behind other content */
+            opacity: 0.6; /* Adjust as needed */
+        }
+
+
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100vh; /* Full viewport height */
+            z-index: 1; /* Ensure UI is above canvas */
+        }
+
+        .sidebar {
+            width: 250px;
+            background-color: #0e0e1e; /* Slightly different dark shade */
+            padding: 20px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .sidebar h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 1.8em;
+            text-shadow: 0 0 5px var(--glow-color);
+        }
+
+        .sidebar label {
+            margin-top: 15px;
+            margin-bottom: 5px;
+            color: var(--secondary-color);
+            font-weight: bold;
+        }
+
+        .sidebar select,
+        .sidebar input[type="text"],
+        .sidebar textarea {
+            width: 100%;
+            padding: 10px;
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-color);
+            margin-bottom: 10px;
+            font-size: 0.95em;
+        }
+
+        .sidebar select {
+             cursor: pointer;
+        }
+        .sidebar textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .sidebar button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary-color);
+            color: var(--bg-color);
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 1.1em;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            text-shadow: 0 0 3px rgba(0,0,0,0.4);
+        }
+
+        .sidebar button:hover {
+            background-color: var(--secondary-color);
+            box-shadow: 0 0 15px var(--glow-color);
+        }
+        .sidebar button:disabled {
+             background-color: #555;
+             cursor: not-allowed;
+             box-shadow: none;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto; /* Allow scrolling only in main content */
+            background: linear-gradient(rgba(10, 10, 26, 0.8), rgba(10, 10, 26, 0.95)); /* Subtle gradient */
+        }
+
+        #output-area {
+            flex: 1; /* Take remaining space */
+            background-color: var(--output-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 20px;
+            overflow-y: auto; /* Scroll within output area */
+            white-space: pre-wrap; /* Preserve line breaks and spaces */
+            margin-bottom: 20px;
+            font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; /* Monospaced font for output */
+            font-size: 0.9em;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+            opacity: 0; /* Start hidden for fade-in */
+            transition: opacity 0.5s ease-in-out;
+        }
+        #output-area.visible {
+            opacity: 1;
+        }
+
+         /* J.A.R.V.I.S-style loading indicator */
+        .loading-indicator {
+            display: none; /* Hidden by default */
+            text-align: center;
+            padding: 15px;
+            color: var(--secondary-color);
+            font-size: 1.1em;
+        }
+        .loading-indicator::after {
+            content: '...';
+            display: inline-block;
+            animation: loading-dots 1.5s infinite steps(3, end);
+            margin-left: 5px;
+        }
+        @keyframes loading-dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+
+        #history-section {
+            max-height: 200px; /* Limit history height */
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 15px;
+            background-color: var(--output-bg);
+             box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4);
+        }
+
+         #history-section h3 {
+             color: var(--secondary-color);
+             margin-bottom: 10px;
+             border-bottom: 1px solid var(--border-color);
+             padding-bottom: 5px;
+         }
+
+         #history-list {
+             list-style: none;
+             padding: 0;
+         }
+         #history-list li {
+             padding: 8px 5px;
+             margin-bottom: 5px;
+             border-bottom: 1px dashed #333;
+             cursor: pointer;
+             transition: background-color 0.2s ease;
+             font-size: 0.85em;
+         }
+         #history-list li:hover {
+              background-color: #2a2a3e;
+              color: var(--primary-color);
+         }
+         #history-list li:last-child {
+             border-bottom: none;
+         }
+
+
+        /* Hide/Show input sections */
+        .input-group {
+            display: none; /* Hide all by default */
+            margin-top: 10px;
+        }
+        .input-group.active {
+            display: block; /* Show active one */
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+    </style>
+</head>
+<body>
+    <canvas id="threejs-canvas"></canvas>
+
+    <div class="container">
+        <div class="sidebar">
+            <h1>Wolfgank AI</h1>
+
+            <label for="tool-select">Pilih Alat:</label>
+            <select id="tool-select">
+                <option value="">-- Pilih --</option>
+                <option value="keyword-hunter">Keyword Hunter</option>
+                <option value="meta-master">Meta Master</option>
+                <option value="article-forge">Article Forge</option>
+                <option value="seo-analyzer">SEO Analyzer</option>
+                <option value="news-radar">News Radar</option>
+            </select>
+
+            <div id="input-keyword-hunter" class="input-group">
+                <label for="kh-topic">Topik Utama:</label>
+                <input type="text" id="kh-topic" placeholder="Contoh: Makanan Kucing Terbaik">
+                <label for="kh-url">URL (Opsional):</label>
+                <input type="text" id="kh-url" placeholder="Contoh: https://example.com/artikel-kucing">
+            </div>
+
+            <div id="input-meta-master" class="input-group">
+                 <label for="mm-content">Konten/Topik/Keywords:</label>
+                 <textarea id="mm-content" placeholder="Masukkan deskripsi singkat, topik, atau keywords..."></textarea>
+                 <label for="mm-url">URL (Opsional):</label>
+                 <input type="text" id="mm-url" placeholder="Contoh: https://example.com/produk-baru">
+             </div>
+
+            <div id="input-article-forge" class="input-group">
+                <label for="af-topic">Topik Artikel:</label>
+                <input type="text" id="af-topic" placeholder="Contoh: Cara Merawat Tanaman Hias Indoor">
+                <label for="af-keywords">Keywords (Opsional):</label>
+                <input type="text" id="af-keywords" placeholder="Contoh: tanaman indoor, perawatan, pupuk">
+            </div>
+
+            <div id="input-seo-analyzer" class="input-group">
+                <label for="sa-url">URL Halaman:</label>
+                <input type="text" id="sa-url" placeholder="Contoh: https://example.com/halaman-utama">
+            </div>
+
+            <div id="input-news-radar" class="input-group">
+                <label for="nr-topic">Topik/Keywords Berita:</label>
+                <input type="text" id="nr-topic" placeholder="Contoh: Perkembangan AI di Indonesia">
+            </div>
+            <button id="submit-button">Analisis Sekarang</button>
+        </div>
+
+        <div class="main-content">
+            <div class="loading-indicator" id="loading">Memproses permintaan Anda...</div>
+            <div id="output-area" aria-live="polite">
+                Selamat datang di Wolfgank AI Tools! Pilih alat dari menu sebelah kiri dan masukkan detail yang diperlukan untuk memulai.
+            </div>
+
+             <div id="history-section">
+                 <h3>Riwayat Pekerjaan</h3>
+                 <ul id="history-list">
+                     <li class="history-placeholder">Belum ada riwayat.</li>
+                 </ul>
+             </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const toolSelect = document.getElementById('tool-select');
+        const submitButton = document.getElementById('submit-button');
+        const outputArea = document.getElementById('output-area');
+        const loadingIndicator = document.getElementById('loading');
+        const historyList = document.getElementById('history-list');
+        const historyPlaceholder = document.querySelector('.history-placeholder');
+        const inputGroups = document.querySelectorAll('.input-group'); // Get all input groups
+
+        // Input fields (map for easier access)
+        const inputs = {
+            'keyword-hunter': {
+                topic: document.getElementById('kh-topic'),
+                url: document.getElementById('kh-url')
+            },
+            'meta-master': {
+                 content: document.getElementById('mm-content'),
+                 url: document.getElementById('mm-url')
+             },
+            'article-forge': {
+                topic: document.getElementById('af-topic'),
+                keywords: document.getElementById('af-keywords')
+            },
+            'seo-analyzer': {
+                url: document.getElementById('sa-url')
+            },
+            'news-radar': {
+                topic: document.getElementById('nr-topic') // Use 'topic' key consistently
+            }
+        };
+
+        // --- State ---
+        let workHistory = JSON.parse(localStorage.getItem('wolfgankHistory')) || [];
+
+        // --- Functions ---
+
+        function updateInputVisibility() {
+            const selectedTool = toolSelect.value;
+            inputGroups.forEach(group => {
+                if (group.id === `input-${selectedTool}`) {
+                    group.classList.add('active');
+                } else {
+                    group.classList.remove('active');
+                }
+            });
+             // Enable/disable button based on selection
+             submitButton.disabled = !selectedTool;
+        }
+
+        function displayOutput(message, isError = false) {
+            outputArea.textContent = message;
+            outputArea.style.color = isError ? '#ff5555' : 'var(--text-color)'; // Red for errors
+            outputArea.classList.add('visible'); // Trigger fade-in
+            loadingIndicator.style.display = 'none'; // Hide loading
+             submitButton.disabled = !toolSelect.value; // Re-enable button based on tool selection
+        }
+
+        function showLoading() {
+            outputArea.textContent = '';
+            outputArea.classList.remove('visible'); // Hide for loading
+            loadingIndicator.style.display = 'block'; // Show loading
+            submitButton.disabled = true; // Disable button during processing
+        }
+
+        function addToHistory(tool, requestData, result) {
+             const timestamp = new Date();
+             const historyEntry = {
+                 id: timestamp.getTime(), // Simple unique ID
+                 tool: tool,
+                 request: requestData, // Store what was asked
+                 result: result.substring(0, 300) + (result.length > 300 ? '...' : ''), // Store snippet of result
+                 fullResult: result, // Store full result separately
+                 timestamp: timestamp.toLocaleString('id-ID') // Indonesian locale
+             };
+             workHistory.unshift(historyEntry); // Add to beginning
+             if (workHistory.length > 15) { // Limit history size
+                 workHistory.pop();
+             }
+             localStorage.setItem('wolfgankHistory', JSON.stringify(workHistory));
+             renderHistory();
+        }
+
+        function renderHistory() {
+            historyList.innerHTML = ''; // Clear existing list
+            if (workHistory.length === 0) {
+                 historyList.innerHTML = '<li class="history-placeholder">Belum ada riwayat.</li>';
+                 return;
+            }
+             historyPlaceholder?.remove(); // Remove placeholder if it exists
+
+            workHistory.forEach(entry => {
+                const li = document.createElement('li');
+                li.textContent = `[${entry.timestamp}] ${getToolName(entry.tool)} - Input: ${truncateRequest(entry.request)}`;
+                li.title = `Klik untuk melihat hasil lengkap`; // Tooltip
+                li.dataset.historyId = entry.id; // Store ID for retrieval
+                li.addEventListener('click', () => {
+                     // Find the full result and display it
+                     const fullEntry = workHistory.find(h => h.id === entry.id);
+                     if (fullEntry) {
+                         displayOutput(fullEntry.fullResult);
+                     }
+                });
+                historyList.appendChild(li);
+            });
+        }
+
+         // Helper to get user-friendly tool name
+         function getToolName(toolId) {
+             const option = toolSelect.querySelector(`option[value="${toolId}"]`);
+             return option ? option.textContent : toolId;
+         }
+
+         // Helper to show a snippet of the request data
+          function truncateRequest(requestData) {
+              // Simple representation, customize as needed
+              let summary = Object.entries(requestData)
+                  .map(([key, value]) => value ? `${key}: ${String(value).substring(0, 20)}...` : '')
+                  .filter(Boolean) // Remove empty strings
+                  .join(', ');
+              return summary.substring(0, 50) + (summary.length > 50 ? '...' : '');
+          }
+
+
+        // --- API Call ---
+        async function callWolfgankAPI(endpoint, data) {
+            showLoading();
+            const API_BASE_URL = 'http://localhost:5000/api'; // Adjust if backend runs elsewhere
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                if (!response.ok) {
+                    // Try to get error message from backend JSON response
+                    let errorMsg = `HTTP error ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMsg = errorData.error || JSON.stringify(errorData);
+                    } catch (jsonError) {
+                        // Ignore if response is not JSON
+                    }
+                     throw new Error(`Error dari server: ${errorMsg}`);
+                }
+
+                const result = await response.json();
+
+                if (result.error) {
+                     throw new Error(`Error dari server: ${result.error}`);
+                }
+
+                displayOutput(result.result || 'Tidak ada hasil yang diterima.');
+                addToHistory(toolSelect.value, data, result.result); // Add successful result to history
+
+            } catch (error) {
+                console.error("API Call Failed:", error);
+                displayOutput(`Terjadi kesalahan: ${error.message}`, true); // Display error
+                loadingIndicator.style.display = 'none'; // Ensure loading is hidden on error
+                 submitButton.disabled = !toolSelect.value; // Re-enable button based on tool selection
+            }
+        }
+
+        // --- Event Listeners ---
+        toolSelect.addEventListener('change', updateInputVisibility);
+
+        submitButton.addEventListener('click', () => {
+            const selectedTool = toolSelect.value;
+            if (!selectedTool) return;
+
+            const endpoint = selectedTool; // API endpoint matches tool value
+            const toolInputs = inputs[selectedTool];
+            let data = {};
+
+            // Collect data from the active input fields
+            if (toolInputs) {
+                for (const key in toolInputs) {
+                    if (toolInputs[key]) { // Check if input element exists
+                        data[key] = toolInputs[key].value.trim();
+                    }
+                }
+            }
+
+            // Basic validation (example for URL fields)
+            if ((selectedTool === 'seo-analyzer' || selectedTool === 'meta-master' && data.url) && data.url && !data.url.startsWith('http')) {
+                displayOutput("URL tidak valid. Harap sertakan http:// atau https://", true);
+                return;
+            }
+             if (selectedTool === 'seo-analyzer' && !data.url) {
+                  displayOutput("URL diperlukan untuk SEO Analyzer.", true);
+                  return;
+             }
+             // Add more specific validation as needed per tool
+
+
+            callWolfgankAPI(endpoint, data);
+        });
+
+        // --- Three.js Basic Background (Optional Example) ---
+        function initThreeJS() {
+            try {
+                const canvas = document.getElementById('threejs-canvas');
+                if (!canvas) return;
+
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true }); // alpha:true for transparency
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setClearColor(0x000000, 0); // Transparent background
+
+                // Simple particle system
+                const particlesGeometry = new THREE.BufferGeometry();
+                const particlesCnt = 5000;
+                const posArray = new Float32Array(particlesCnt * 3);
+                for (let i = 0; i < particlesCnt * 3; i++) {
+                    posArray[i] = (Math.random() - 0.5) * 10; // Spread particles
+                }
+                particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+
+                const particlesMaterial = new THREE.PointsMaterial({
+                    size: 0.015,
+                    color: 0xff6600, // Neon orange
+                    transparent: true,
+                    blending: THREE.AdditiveBlending // Glowing effect
+                });
+
+                const particleMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+                scene.add(particleMesh);
+
+                camera.position.z = 5;
+
+                // Mouse movement interaction (subtle)
+                document.addEventListener('mousemove', (event) => {
+                    const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+                    const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+                    particleMesh.rotation.x = mouseY * 0.1;
+                    particleMesh.rotation.y = mouseX * 0.1;
+                });
+
+
+                function animate() {
+                    requestAnimationFrame(animate);
+                     particleMesh.rotation.z += 0.0005; // Slow rotation
+                    renderer.render(scene, camera);
+                }
+
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                animate();
+                console.log("Three.js background initialized.");
+            } catch (error) {
+                console.error("Failed to initialize Three.js:", error);
+                 // Hide canvas if it fails
+                 const canvas = document.getElementById('threejs-canvas');
+                 if (canvas) canvas.style.display = 'none';
+            }
+        }
+
+        // --- Initial Setup ---
+        updateInputVisibility(); // Set initial input visibility
+        renderHistory(); // Load history on page load
+        initThreeJS(); // Initialize the background effect
+
+    </script>
+</body>
+</html>
